@@ -39,3 +39,6 @@ State why for each point.
 Perhaps make another shorter markdown file, which has the minimum amount of information to set up and get everything working. Don't need theory or reasons behind decisions, etc.
 
 Just give short description of project, specs up front, parts needed, schematic, software.
+
+## Resources
+Links here
