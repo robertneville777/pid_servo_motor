@@ -29,6 +29,7 @@ State why for each point.
 * L289N motor driver
 * Rotary quad encoder
 * Belts and pulleys
+* Power supply (check the max current and voltage I use)
 
 ## Schematic (how to connect everything)
 
