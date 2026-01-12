@@ -34,6 +34,7 @@ State why for each point.
 ## Schematic (how to connect everything)
 
 ## Software
+* Include info about pullup resistors for encoder. Amazon reviews say the encoder is open collector? Find images and make sense of this. Next try to use Arduino internal pullup resistors and include info on them. Include scope snippets.
 
 ## Todo
 Perhaps make another shorter markdown file, which has the minimum amount of information to set up and get everything working. Don't need theory or reasons behind decisions, etc.
