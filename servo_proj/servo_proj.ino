@@ -1,5 +1,5 @@
 /* 
- * Place servo proj description here
+ * Sketch for servo motor using 775 DC motor and optical rotary encoder. 
  */
 
 #include <Encoder.h>
@@ -14,6 +14,12 @@ long newPosition = -999;
 float angleMeasured_deg = 0.0;
 Encoder myEnc(2, 3);
 
+// MOTOR
+int enA = 9; // speed pin
+int in1 = 8; // dir   pin
+int in2 = 7; // dir   pin
+uint8_t finalMotorCmd = 0; // Value to pin to motor driver
+
 // PID
 unsigned long lastTime_ms;
 float motor_cmd;          // PID output
@@ -25,11 +31,11 @@ float kp, ki, kd;
 // float kd = 0;
 int SampleTime_ms = 1; // 1 ms
 
-// MOTOR
-int enA = 9; // speed pin
-int in1 = 8; // dir   pin
-int in2 = 7; // dir   pin
-uint8_t finalMotorCmd = 0; // Value to pin to motor driver
+// SERIAL COMMUNICATION
+const byte numChars = 10;
+char receivedChars[numChars];   // array to store received data
+boolean newData = false;
+int dataNumber = 0;
 
 void setup() {
 
@@ -58,15 +64,51 @@ void loop() {
     angleMeasured_deg = ((float)newPosition/2400)*360; // Convert encoder counts to degrees
   }
 
-  // // Compute PID motor command given current angle and desired angle
-  motorPidCmd(); // Compute pid command to motor
+  // Compute PID motor command given current angle and desired angle
+  motorPidCmd();
 
-  // // Run motor
+  // Run motor
   runMotor();
 
-  // Serial.println(angleMeasured_deg); // Print current angle
-  Serial.println(finalMotorCmd); // Print current angle
+  // Serial.println(angleDesired_deg); // Print desired angle setpoint
+  Serial.println(angleMeasured_deg); // Print current measured angle
+  // Serial.println(finalMotorCmd); // Print PID output cmd to motor
 
+  // Get angle command from keyboard if there is one. New angle used next loop.
+  getAngleSerial();
+
+}
+
+void getAngleSerial() {
+    static uint8_t ndx = 0;
+    char endMarker = '\n';
+    char rc;
+    
+    if (Serial.available() > 0) {
+        rc = Serial.read();
+
+        if (rc != endMarker) {
+            receivedChars[ndx] = rc;
+            ndx++;
+            if (ndx >= numChars) {
+                ndx = numChars - 1;
+            }
+        }
+        else {
+            receivedChars[ndx] = '\0'; // terminate the string
+            ndx = 0;
+            newData = true;
+        }
+    }
+
+    if (newData == true) { // After keyboard value has been input, convert to int and set angle
+        dataNumber = 0;
+        dataNumber = atoi(receivedChars);
+        angleDesired_deg = (float)dataNumber;
+        // Serial.print("New angle setpoint is ");
+        // Serial.println(angleDesired_deg);
+        newData = false;
+    }
 }
 
 // Function to compute motor command (PID)
@@ -76,7 +118,7 @@ void motorPidCmd() {
   if(timeChange_ms >= SampleTime_ms)
   {
     /* Compute all the working error variables */
-    angleDesired_deg = 0;
+    // angleDesired_deg = 0;
     float error = angleDesired_deg - angleMeasured_deg; // 0 - 15 = -15
     // errSum += error;
     // float dErr = (error - lastErr);
