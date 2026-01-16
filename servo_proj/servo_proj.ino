@@ -34,8 +34,14 @@ int SampleTime_ms = 1; // 1 ms
 // SERIAL COMMUNICATION
 const byte numChars = 10;
 char receivedChars[numChars];   // array to store received data
+char tempChars[numChars];       // temporary array for use when parsing
 boolean newData = false;
-int dataNumber = 0;
+char pcCmdType[numChars];       // Command from keyboard, e.g. 'angle', 'p', 'i', or 'd'
+const char pcCmdAngle[] = "angle";
+const char pcCmdP[] = "p";
+const char pcCmdI[] = "i";
+const char pcCmdD[] = "d";
+float pcCmdValue = 0;           // Value from keyboard to set
 
 void setup() {
 
@@ -56,7 +62,26 @@ void setup() {
 
 void loop() {
 
-  // Get angle
+  // Get encoder angle
+  getAngle();
+
+  // Compute motor command using PID
+  motorPidCmd();
+
+  // Run motor
+  runMotor();
+
+  // Get angle and PID values from user if available. Used next loop.
+  getKeyboardInput();
+
+  // Print angle and PID data
+  printData();
+
+}
+
+// Function to read encoder angle
+inline void getAngle() {
+
   newPosition = myEnc.read();
   if (newPosition != oldPosition) {
     oldPosition = newPosition;
@@ -64,22 +89,30 @@ void loop() {
     angleMeasured_deg = ((float)newPosition/2400)*360; // Convert encoder counts to degrees
   }
 
-  // Compute PID motor command given current angle and desired angle
-  motorPidCmd();
+}
 
-  // Run motor
-  runMotor();
+// Function that prints out angle and PID data
+inline void printData() {
 
-  // Serial.println(angleDesired_deg); // Print desired angle setpoint
-  Serial.println(angleMeasured_deg); // Print current measured angle
-  // Serial.println(finalMotorCmd); // Print PID output cmd to motor
+  Serial.print("Desired Angle: ");
+  Serial.print(angleDesired_deg);
 
-  // Get angle command from keyboard if there is one. New angle used next loop.
-  getAngleSerial();
+  Serial.print(", Measured Angle: ");
+  Serial.print(angleMeasured_deg);
+
+  Serial.print(", Kp: ");
+  Serial.print(kp);
+
+  Serial.print(", Ki: ");
+  Serial.print(ki);
+
+  Serial.print(", Kd: ");
+  Serial.println(kd);
 
 }
 
-void getAngleSerial() {
+// Function that takes angle and PID cmds from serial and sets the appropriate values.
+void getKeyboardInput() {
     static uint8_t ndx = 0;
     char endMarker = '\n';
     char rc;
@@ -102,11 +135,33 @@ void getAngleSerial() {
     }
 
     if (newData == true) { // After keyboard value has been input, convert to int and set angle
-        dataNumber = 0;
-        dataNumber = atoi(receivedChars);
-        angleDesired_deg = (float)dataNumber;
-        // Serial.print("New angle setpoint is ");
-        // Serial.println(angleDesired_deg);
+        
+        char* strtokIndx; // this is used by strtok() as an index
+
+        strcpy(tempChars, receivedChars);
+
+        strtokIndx = strtok(tempChars, " ");  // Get the first part - the string
+        strcpy(pcCmdType, strtokIndx);        // Copy to pcCmdType
+
+        strtokIndx = strtok(NULL, ",");       // This continues where the previous call left off
+        pcCmdValue = atof(strtokIndx);        // Convert to float
+
+        if(strcmp(pcCmdType, pcCmdAngle) == 0) {    // if cmd string is "angle"
+          angleDesired_deg = pcCmdValue;            // set desired angle
+        }
+        else if(strcmp(pcCmdType, pcCmdP) == 0) {   // if cmd string is "p"
+          kp = pcCmdValue;                          // set kp
+        }
+        else if(strcmp(pcCmdType, pcCmdI) == 0) {   // if cmd string is "i"
+          ki = pcCmdValue;                          // set ki
+        }
+        else if(strcmp(pcCmdType, pcCmdD) == 0) {   // if cmd string is "d"
+          kd = pcCmdValue;                          // set kd
+        }
+        else {
+          // Not a recognized command. Could print out some error message.
+        }
+
         newData = false;
     }
 }
@@ -118,17 +173,12 @@ void motorPidCmd() {
   if(timeChange_ms >= SampleTime_ms)
   {
     /* Compute all the working error variables */
-    // angleDesired_deg = 0;
-    float error = angleDesired_deg - angleMeasured_deg; // 0 - 15 = -15
-    // errSum += error;
-    // float dErr = (error - lastErr);
-
-    kp = 20;
-    // ki = 0;
-    // kd = 0;
+    float error = angleDesired_deg - angleMeasured_deg;
+    errSum += error;
+    float dErr = (error - lastErr);
 
     /* Compute PID Output */
-    motor_cmd = kp * error; // + ki * errSum + kd * dErr; // -15
+    motor_cmd = kp * error + ki * errSum + kd * dErr;
 
     /* Remember some variables for next time */
     lastErr = error;
@@ -139,8 +189,6 @@ void motorPidCmd() {
 
 // Function to command motor
 void runMotor() {
-  
-  // motor_cmd = -15;
 
   // Set motor direction
   if (motor_cmd > 0) {      // Pos cmd is CCW
