@@ -6,6 +6,7 @@
 #include <DueFlashStorage.h>
 
 #define ENCODER_USE_INTERRUPTS
+#define NVM_STORAGE_ADDR 0 // Using NVM flash address 0 for saving angle and PID variables
 
 /* VARIABLES */
 
@@ -57,7 +58,7 @@ config configFromNvm; // Struct read from NVM
 config configToNvm;   // Struct to write to NVM
 uint8_t tempConfig[sizeof(configToNvm)]; // Temporary u8 array to store struct 
                                          // when reading/writing to NVM
-uint8_t* b; // pointer for reading from flash
+uint8_t* b; // pointer for reading from NVM
 
 void setup() {
 
@@ -74,26 +75,8 @@ void setup() {
   Serial.begin(115200);
   Serial.println("Basic Encoder Test:");
   
-  // Load NVM values
-  b = dueFlashStorage.readAddress(0); // read byte array starting at address 0
-  memcpy(&configFromNvm, b, sizeof(configFromNvm)); // Copy from flash memory to config struct
-
-  // Flash values by default are 255. When config values are saved,
-  // the initStatus is set to 0 to indicate there are saved values.
-  if(configFromNvm.initStatus == 0) { // If there are saved values, load them
-    // Set angles
-    uint32_t savedEncPos = (uint32_t)((configFromNvm.savedMeasuredAngle * 2400)/360); // Convert saved angle to encoder position
-    myEnc.write(savedEncPos);
-    angleDesired_deg = configFromNvm.savedDesiredAngle;
-
-    // Set PID parameters
-    kp = configFromNvm.savedKp;
-    ki = configFromNvm.savedKi;
-    kd = configFromNvm.savedKd;
-  }
-  else {
-    // There are no saved values. Use program's initial values
-  }
+  // Load saved angle and PID info from NVM
+  loadNvm();
 
 }
 
@@ -113,6 +96,31 @@ void loop() {
 
   // Print angle and PID data
   printData();
+
+}
+
+// Function to load angle and PID params from flash NVM
+void loadNvm() {
+
+  b = dueFlashStorage.readAddress(NVM_STORAGE_ADDR); // read byte array starting at address 0
+  memcpy(&configFromNvm, b, sizeof(configFromNvm)); // Copy from flash memory to config struct
+
+  // Flash values by default are 255. When config values are saved,
+  // the initStatus is set to 0 to indicate there are saved values.
+  if(configFromNvm.initStatus == 0) { // If there are saved values, load them
+    // Set angles
+    uint32_t savedEncPos = (uint32_t)((configFromNvm.savedMeasuredAngle * 2400)/360); // Convert saved angle to encoder position
+    myEnc.write(savedEncPos);
+    angleDesired_deg = configFromNvm.savedDesiredAngle;
+
+    // Set PID parameters
+    kp = configFromNvm.savedKp;
+    ki = configFromNvm.savedKi;
+    kd = configFromNvm.savedKd;
+  }
+  else {
+    // There are no saved values. Use program's initial values
+  }
 
 }
 
@@ -148,7 +156,7 @@ inline void printData() {
 
 }
 
-// Function that takes angle and PID cmds from serial and sets the appropriate values.
+// Function that reads angle and PID cmds from serial and sets the appropriate values.
 void getKeyboardInput() {
     static uint8_t ndx = 0;
     char endMarker = '\n';
@@ -209,8 +217,8 @@ void getKeyboardInput() {
             .savedKd = kd
           };
 
-          memcpy(tempConfig, &configToNvm, sizeof(configToNvm));     // Copy struct to array
-          dueFlashStorage.write(0, tempConfig, sizeof(configToNvm)); // Write array to flash at address 0
+          memcpy(tempConfig, &configToNvm, sizeof(configToNvm));                    // Copy struct to array
+          dueFlashStorage.write(NVM_STORAGE_ADDR, tempConfig, sizeof(configToNvm)); // Write array to flash at address 0
 
         }
         else {
