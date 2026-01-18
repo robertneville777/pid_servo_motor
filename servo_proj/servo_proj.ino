@@ -3,6 +3,7 @@
  */
 
 #include <Encoder.h>
+#include <DueFlashStorage.h>
 
 #define ENCODER_USE_INTERRUPTS
 
@@ -23,25 +24,40 @@ uint8_t finalMotorCmd = 0; // Value to pin to motor driver
 // PID
 unsigned long lastTime_ms;
 float motor_cmd;          // PID output
-float angleDesired_deg;  // PID setpoint
+float angleDesired_deg;   // PID setpoint
 float errSum, lastErr;
 float kp, ki, kd;
-// float kp = 1;
-// float ki = 0;
-// float kd = 0;
 int SampleTime_ms = 1; // 1 ms
 
 // SERIAL COMMUNICATION
 const byte numChars = 10;
-char receivedChars[numChars];   // array to store received data
-char tempChars[numChars];       // temporary array for use when parsing
+char receivedChars[numChars];       // array to store received data
+char tempChars[numChars];           // temporary array for use when parsing
 boolean newData = false;
-char pcCmdType[numChars];       // Command from keyboard, e.g. 'angle', 'p', 'i', or 'd'
+char pcCmdType[numChars];           // Command from keyboard, e.g. 'angle', 'p', 'i', or 'd'
 const char pcCmdAngle[] = "angle";
-const char pcCmdP[] = "p";
-const char pcCmdI[] = "i";
-const char pcCmdD[] = "d";
-float pcCmdValue = 0;           // Value from keyboard to set
+const char pcCmdP[]     = "p";
+const char pcCmdI[]     = "i";
+const char pcCmdD[]     = "d";
+const char pcCmdCal[]   = "cal";
+const char pcCmdSave[]  = "save";
+float pcCmdValue = 0;               // Value from keyboard to set
+
+// FLASH NVM
+DueFlashStorage dueFlashStorage;  // Create flash storage object
+struct config {
+  uint8_t initStatus;             // Flash is 255 at first run. Set initStatus to 
+  float   savedMeasuredAngle;     // indicate values have been initialized
+  float   savedDesiredAngle;
+  float   savedKp;
+  float   savedKi;
+  float   savedKd;
+};
+config configFromNvm; // Struct read from NVM
+config configToNvm;   // Struct to write to NVM
+uint8_t tempConfig[sizeof(configToNvm)]; // Temporary u8 array to store struct 
+                                         // when reading/writing to NVM
+uint8_t* b; // pointer for reading from flash
 
 void setup() {
 
@@ -58,6 +74,27 @@ void setup() {
   Serial.begin(115200);
   Serial.println("Basic Encoder Test:");
   
+  // Load NVM values
+  b = dueFlashStorage.readAddress(0); // read byte array starting at address 0
+  memcpy(&configFromNvm, b, sizeof(configFromNvm)); // Copy from flash memory to config struct
+
+  // Flash values by default are 255. When config values are saved,
+  // the initStatus is set to 0 to indicate there are saved values.
+  if(configFromNvm.initStatus == 0) { // If there are saved values, load them
+    // Set angles
+    uint32_t savedEncPos = (uint32_t)((configFromNvm.savedMeasuredAngle * 2400)/360); // Convert saved angle to encoder position
+    myEnc.write(savedEncPos);
+    angleDesired_deg = configFromNvm.savedDesiredAngle;
+
+    // Set PID parameters
+    kp = configFromNvm.savedKp;
+    ki = configFromNvm.savedKi;
+    kd = configFromNvm.savedKd;
+  }
+  else {
+    // There are no saved values. Use program's initial values
+  }
+
 }
 
 void loop() {
@@ -68,7 +105,7 @@ void loop() {
   // Compute motor command using PID
   motorPidCmd();
 
-  // Run motor
+  // // Run motor
   runMotor();
 
   // Get angle and PID values from user if available. Used next loop.
@@ -158,6 +195,24 @@ void getKeyboardInput() {
         else if(strcmp(pcCmdType, pcCmdD) == 0) {   // if cmd string is "d"
           kd = pcCmdValue;                          // set kd
         }
+        else if(strcmp(pcCmdType, pcCmdCal) == 0) { // if cmd string is "cal"
+          newPosition = myEnc.readAndReset();       // reset measured angle to 0
+        }
+        else if(strcmp(pcCmdType, pcCmdSave) == 0){ // if cmd string is "save"
+
+          configToNvm = {
+            .initStatus = 0,
+            .savedMeasuredAngle = angleMeasured_deg,
+            .savedDesiredAngle  = angleDesired_deg,
+            .savedKp = kp,
+            .savedKi = ki,
+            .savedKd = kd
+          };
+
+          memcpy(tempConfig, &configToNvm, sizeof(configToNvm));     // Copy struct to array
+          dueFlashStorage.write(0, tempConfig, sizeof(configToNvm)); // Write array to flash at address 0
+
+        }
         else {
           // Not a recognized command. Could print out some error message.
         }
@@ -215,8 +270,4 @@ void runMotor() {
   // Send cmd to motor
   analogWrite(enA, finalMotorCmd);
 
-}
-
-void calibrate() {
-  // cal code here
 }
