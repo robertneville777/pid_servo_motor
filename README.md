@@ -41,5 +41,9 @@ Perhaps make another shorter markdown file, which has the minimum amount of info
 
 Just give short description of project, specs up front, parts needed, schematic, software.
 
+## Lessons Learned / Future Improvements
+* Use magnetic rotary position sensor (e.g. AS5600) with magnet instead of rotary encoder with belt. Then a belt system (that's more difficult to adjust) isn't needed.
+* Use an electric motor with higher torque. Torque for the 775 motor only has 2.7 kg-cm, whereas the LeRobot/HiWonder SO-ARM101 uses [30 kg-cm servos](https://www.hiwonder.com/products/lerobot-so-101?variant=42198960144471).
+
 ## Resources
 Links here
